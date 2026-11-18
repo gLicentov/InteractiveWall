@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LUMOPlay Wall — Интерактивная проекционная стена</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: #000;
+            color: #fff;
+            user-select: none;
+        }
+
+        .container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* === БОКОВАЯ ПАНЕЛЬ УПРАВЛЕНИЯ === */
+        .sidebar {
+            width: 320px;
+            background: #14161c;
+            border-right: 1px solid #2b2f3a;
+            padding: 16px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            transition: margin-left 0.25s ease;
+            z-index: 20;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #333947;
+            border-radius: 3px;
+        }
+
+        body.fullscreen-game .sidebar {
+            margin-left: -320px;
+        }
+
+        .section {
+            margin-bottom: 14px;
+            padding: 12px;
+            background: #1e212b;
+            border: 1px solid #2c3140;
+            border-radius: 8px;
+        }
+
+        .section h3 {
+            color: #4ade80;
+            margin-bottom: 10px;
+            font-size: 12px;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+        }
+
+        .status {
+            padding: 8px 10px;
+            background: #2b303d;
+            border-radius: 6px;
+            font-size: 12px;
+            text-align: center;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .status.active {
+            background: #15803d;
+            color: #fff;
+        }
+
+        .status.error {
+            background: #b91c1c;
+            color: #fff;
+        }
+
+        .control-group {
+            margin-bottom: 8px;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #cbd5e1;
+        }
+
+        label span.val {
+            color: #4ade80;
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #4ade80;
+            cursor: pointer;
+        }
+
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 6px 8px;
+            background: #111318;
+            color: #fff;
+            border: 1px solid #374151;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px 10px;
+            margin-top: 4px;
+            background: #22c55e;
+            color: #052e16;
+            font-weight: 700;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button.secondary {
+            background: #334155;
+            color: #f8fafc;
+        }
+
+        button.danger {
+            background: #ef4444;
+            color: #fff;
+        }
+
+        button.game-btn {
+            background: #272d3d;
+            color: #e2e8f0;
+            text-align: left;
+            padding: 9px 12px;
+            border: 1px solid transparent;
+        }
+
+        button.game-btn.active {
+            background: #1d4ed8;
+            color: #fff;
+            border-color: #60a5fa;
+        }
+
+        .checkbox-label {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            margin: 6px 0;
+        }
+
+        .checkbox-label input {
+            width: 15px;
+            height: 15px;
+            accent-color: #4ade80;
+        }
+
+        /* Превью камеры с наложением ROI и движения */
+        .video-preview-box {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #0b0d12;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 8px;
+            border: 1px solid #334155;
+        }
+
+        #cameraVideo {
+            display: none;
+        }
+
+        #cameraPreviewCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
+
+        #cameraPlaceholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 12px;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .hotkeys-hint {
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
+        .hotkeys-hint kbd {
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 3px;
+            padding: 1px 5px;
+            color: #e2e8f0;
+            font-family: monospace;
+        }
+
+        /* === ИГРОВАЯ ОБЛАСТЬ === */
+        .game-area {
+            position: relative;
+            flex: 1;
+            background: radial-gradient(circle at 30% 20%, #162238 0%, #070b14 100%);
+            overflow: hidden;
+        }
+
+        #gameCanvas,
+        #overlayCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #overlayCanvas {
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .hud-top {
+            position: absolute;
+            top: 20px;
+            left: 24px;
+            right: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .game-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: #f8fafc;
+            text-shadow: 0 3px 12px rgba(0, 0, 0, 0.7);
+        }
+
+        .hud-stats {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .score-badge, .lives-badge {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 8px 18px;
+            border-radius: 999px;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .score-badge {
+            color: #4ade80;
+        }
+
+        .lives-badge {
+            color: #f87171;
+        }
+
+        /* Кнопка возврата меню в полноэкранном режиме (появляется при наведении в угол) */
+        .exit-hint {
+            position: absolute;
+            bottom: 14px;
+            left: 16px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.35);
+            pointer-events: none;
+            z-index: 10;
+            display: none;
+        }
+
+        body.fullscreen-game .exit-hint {
+            display: block;
+        }
+
+        /* Экран окончания игры (вместо alert) */
+        .game-over-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(5, 8, 18, 0.8);
+            backdrop-filter: blur(6px);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 15;
+            gap: 16px;
+        }
+
+        .game-over-overlay.visible {
+            display: flex;
+        }
+
+        .game-over-overlay h1 {
+            font-size: 52px;
+            color: #f87171;
+        }
+
+        .game-over-overlay p {
+            font-size: 28px;
+            color: #4ade80;
+            font-weight: 700;
+        }
+
+        .game-over-actions {
+            display: flex;
+            gap: 12px;
+            width: 320px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- БОКОВАЯ ПАНЕЛЬ -->
+        <aside class="sidebar" id="sidebar">
+            <div class="section">
+                <h3>Статус системы</h3>
+                <div class="status" id="systemStatus">Система готова</div>
+            </div>
+
+            <div class="section">
+                <h3>Выбор игры</h3>
+                <button class="game-btn active" id="btn-game-bubbles" onclick="selectGame('bubbles')">
+                    🫧 Лопание пузырей
+                </button>
+                <button class="game-btn" id="btn-game-ships" onclick="selectGame('ships')">
+                    🚀 Космические захватчики
+                </button>
+            </div>
+
+            <div class="section">
+                <h3>Камера (720p 16:9)</h3>
+                <div class="video-preview-box">
+                    <video id="cameraVideo" autoplay muted playsinline></video>
+                    <canvas id="cameraPreviewCanvas" width="320" height="180"></canvas>
+                    <div id="cameraPlaceholder">Камера не активна<br>(можно играть мышью)</div>
+                </div>
+                <div class="control-group">
+                    <label>Устройство камеры:</label>
+                    <select id="cameraSelect">
+                        <option value="">Автовыбор (внешняя USB)</option>
+                    </select>
+                </div>
+                <div class="row-2">
+                    <button onclick="startCamera()">Запустить</button>
+                    <button class="danger" onclick="stopCamera()">Остановить</button>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="mirrorCamera" checked onchange="syncSettings()">
+                    Отзеркалить камеру (горизонт.)
+                </label>
+            </div>
+
+            <div class="section">
+                <h3>Калибровка области стены (ROI)</h3>
+                <div class="control-group">
+                    <label>Отступ слева: <span class="val" id="roiLeftVal">0%</span></label>
+                    <input type="range" id="roiLeft" min="0" max="45" value="0" oninput="syncSettings()">
+                </div>
+                <div class="control-group">
+                    <label>Отступ справа: <span class="val" id="roiRightVal">0%</span></label>
+                    <input type="range" id="roiRight" min="0" max="45" value="0" oninput="syncSettings()">
+                </div>
+                <div class="control-group">
+                    <label>Отступ сверху: <span class="val" id="roiTopVal">0%</span></label>
+                    <input type="range" id="roiTop" min="0" max="45" value="0" oninput="syncSettings()">
+                </div>
+                <div class="control-group">
+                    <label>Отступ снизу: <span class="val" id="roiBottomVal">0%</span></label>
+                    <input type="range" id="roiBottom" min="0" max="45" value="0" oninput="syncSettings()">
+                </div>
+                <div class="control-group">
+                    <label>Чувствительность движения: <span class="val" id="sensitivityVal">6</span></label>
+                    <input type="range" id="sensitivity" min="1" max="10" value="6" oninput="syncSettings()">
+                </div>
+                <div class="control-group">
+                    <label>Мин. размер объекта (пикс.): <span class="val" id="minBlobVal">35</span></label>
+                    <input type="range" id="minBlobSize" min="10" max="200" step="5" value="35" oninput="syncSettings()">
+                </div>
+                <button class="secondary" onclick="resetROI()">Сбросить область</button>
+            </div>
+
+            <div class="section" id="bubblesSettings">
+                <h3>Настройки: Пузыри</h3>
+                <div class="control-group">
+                    <label>Интервал появления: <span class="val" id="bubbleSpeedVal">1.2с</span></label>
+                    <input type="range" id="bubbleSpeed" min="300" max="2500" step="100" value="1200" oninput="syncSettings()">
+                </div>
+                <div class="control-group">
+                    <label>Базовый размер: <span class="val" id="bubbleSizeVal">60px</span></label>
+                    <input type="range" id="bubbleSize" min="35" max="120" step="5" value="60" oninput="syncSettings()">
+                </div>
+            </div>
+
+            <div class="section" id="shipsSettings" style="display: none;">
+                <h3>Настройки: Корабли</h3>
+                <div class="control-group">
+                    <label>Интервал появления: <span class="val" id="shipSpeedVal">1.8с</span></label>
+                    <input type="range" id="shipSpeed" min="600" max="4000" step="100" value="1800" oninput="syncSettings()">
+                </div>
+                <div class="control-group">
+                    <label>Скорость полёта: <span class="val" id="shipMoveSpeedVal">3.5</span></label>
+                    <input type="range" id="shipMoveSpeed" min="1.5" max="8" step="0.5" value="3.5" oninput="syncSettings()">
+                </div>
+                <div class="control-group">
+                    <label>Количество жизней:</label>
+                    <input type="number" id="maxLives" value="5" min="1" max="20" onchange="syncSettings()">
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Управление игрой</h3>
+                <button onclick="startGame(true)">▶ Запустить на весь экран</button>
+                <div class="row-2">
+                    <button class="secondary" onclick="startGame(false)">Тест в окне</button>
+                    <button class="danger" onclick="stopGame()">■ Стоп</button>
+                </div>
+                <button class="secondary" onclick="toggleBrowserFullscreen()">⛶ Полный экран браузера (F)</button>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="soundEnabled" checked onchange="syncSettings()">
+                    Звуковые эффекты (Web Audio)
+                </label>
+            </div>
+
+            <div class="section">
+                <h3>Отладка CV</h3>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showMotionOverlay" checked onchange="syncSettings()">
+                    Показывать точки движения на стене
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showMotionMask" onchange="syncSettings()">
+                    Показывать маску разности на превью
+                </label>
+                <div class="hotkeys-hint">
+                    <kbd>Esc</kbd> — выход в меню<br>
+                    <kbd>Space</kbd> — старт / стоп<br>
+                    <kbd>F</kbd> — полный экран | <kbd>D</kbd> — отладка
+                </div>
+            </div>
+        </aside>
+
+        <!-- ИГРОВАЯ ОБЛАСТЬ (ПРОЕКЦИЯ) -->
+        <main class="game-area" id="gameArea">
+            <canvas id="gameCanvas"></canvas>
+            <canvas id="overlayCanvas"></canvas>
+
+            <div class="hud-top">
+                <div class="game-title" id="gameTitle">🫧 Лопание пузырей</div>
+                <div class="hud-stats">
+                    <div class="score-badge" id="scoreDisplay">Счёт: 0</div>
+                    <div class="lives-badge" id="livesDisplay" style="display: none;">❤️ 5</div>
+                </div>
+            </div>
+
+            <div class="exit-hint">Нажмите ESC для возврата в панель управления</div>
+
+            <div class="game-over-overlay" id="gameOverOverlay">
+                <h1>ИГРА ОКОНЧЕНА</h1>
+                <p id="finalScoreText">Счёт: 0</p>
+                <div class="game-over-actions">
+                    <button onclick="restartGame()">Играть снова</button>
+                    <button class="secondary" onclick="stopGame()">В меню (Esc)</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        /* =========================================================================
+           1. КОНФИГУРАЦИЯ И СОСТОЯНИЕ ПРИЛОЖЕНИЯ
+           ========================================================================= */
+        const CV_WIDTH = 320;   // Рабочая ширина анализа кадров (16:9 под 720p)
+        const CV_HEIGHT = 180;  // Рабочая высота анализа кадров
+
+        const state = {
+            isGameRunning: false,
+            isCameraActive: false,
+            currentGame: 'bubbles', // 'bubbles' | 'ships'
+            score: 0,
+            lives: 5,
+            maxLives: 5,
+
+            // Игровые сущности
+            bubbles: [],
+            ships: [],
+            particles: [],
+            stars: [],
+            motionBlobs: [], // Последние обнаруженные точки движения в координатах gameCanvas
+
+            // Настройки
+            settings: {
+                mirrorCamera: true,
+                roiLeft: 0,      // % обрезки кадра камеры
+                roiRight: 0,
+                roiTop: 0,
+                roiBottom: 0,
+                sensitivity: 6,  // 1..10 (чем выше, тем чувствительнее)
+                minBlobSize: 35, // Мин. кол-во пикселей в пятне движения
+                bubbleSpeed: 1200,
+                bubbleSize: 60,
+                shipSpeed: 1800,
+                shipMoveSpeed: 3.5,
+                soundEnabled: true,
+                showMotionOverlay: true,
+                showMotionMask: false
+            }
+        };
+
+        /* =========================================================================
+           2. МЕНЕДЖЕР ГРАФИЧЕСКИХ СПРАЙТОВ (ЗАДЕЛ ДЛЯ КАСТОМНОЙ ГРАФИКИ)
+           Положите PNG/SVG в папку assets/ и укажите пути ниже.
+           Если файл не найден, движок автоматически рисует векторную графику.
+           ========================================================================= */
+        const AssetManager = {
+            sprites: {},
+            manifest: {
+                // Пример подключения своих картинок:
+                // bubble: 'assets/bubble.png',
+                // ship: 'assets/ship.png',
+                // background: 'assets/space_bg.jpg'
+            },
+            loadAll() {
+                for (const [key, src] of Object.entries(this.manifest)) {
+                    const img = new Image();
+                    img.onload = () => { this.sprites[key] = img; };
+                    img.onerror = () => { console.warn(`Спрайт не загружен (${src}), используется процедурная графика.`); };
+                    img.src = src;
+                }
+            },
+            get(key) {
+                return this.sprites[key] || null;
+            }
+        };
+
+        /* =========================================================================
+           3. ЗВУКОВОЙ СИНТЕЗАТОР (WEB AUDIO API — БЕЗ ВНЕШНИХ ФАЙЛОВ)
+           ========================================================================= */
+        const SoundFX = {
+            ctx: null,
+            ensureContext() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+            playPop() {
+                if (!state.settings.soundEnabled) return;
+                this.ensureContext();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(320 + Math.random() * 180, now);
+                osc.frequency.exponentialRampToValueAtTime(900, now + 0.08);
+                gain.gain.setValueAtTime(0.22, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.12);
+            },
+            playExplosion() {
+                if (!state.settings.soundEnabled) return;
+                this.ensureContext();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.exponentialRampToValueAtTime(35, now + 0.25);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+        };
+
+        /* =========================================================================
+           4. DOM-ЭЛЕМЕНТЫ И CANVAS
+           ========================================================================= */
+        const gameArea = document.getElementById('gameArea');
+        const gameCanvas = document.getElementById('gameCanvas');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const ctx = gameCanvas.getContext('2d');
+        const overlayCtx = overlayCanvas.getContext('2d');
+
+        const cameraVideo = document.getElementById('cameraVideo');
+        const previewCanvas = document.getElementById('cameraPreviewCanvas');
+        const previewCtx = previewCanvas.getContext('2d');
+
+        // Offscreen canvas для компьютерного зрения
+        const cvCanvas = document.createElement('canvas');
+        cvCanvas.width = CV_WIDTH;
+        cvCanvas.height = CV_HEIGHT;
+        const cvCtx = cvCanvas.getContext('2d', { willReadFrequently: true });
+
+        let cameraStream = null;
+        let previousGrayFrame = null;
+        let cvInterval = null;
+        let spawnTimer = null;
+        let animFrameId = null;
+        let lastFrameTime = 0;
+
+        /* =========================================================================
+           5. ИНИЦИАЛИЗАЦИЯ И РАЗМЕРЫ
+           ========================================================================= */
+        function init() {
+            AssetManager.loadAll();
+            resizeCanvases();
+            initStarfield();
+            syncSettings();
+            populateCameraList();
+            bindEvents();
+            requestAnimationFrame(renderLoop);
+        }
+
+        function resizeCanvases() {
+            const rect = gameArea.getBoundingClientRect();
+            gameCanvas.width = Math.max(1, Math.floor(rect.width));
+            gameCanvas.height = Math.max(1, Math.floor(rect.height));
+            overlayCanvas.width = gameCanvas.width;
+            overlayCanvas.height = gameCanvas.height;
+            initStarfield();
+        }
+
+        function initStarfield() {
+            state.stars = [];
+            for (let i = 0; i < 85; i++) {
+                state.stars.push({
+                    x: Math.random() * gameCanvas.width,
+                    y: Math.random() * gameCanvas.height,
+                    r: 0.8 + Math.random() * 1.8,
+                    alpha: 0.25 + Math.random() * 0.6,
+                    speed: 0.15 + Math.random() * 0.45
+                });
+            }
+        }
+
+        function bindEvents() {
+            window.addEventListener('resize', resizeCanvases);
+
+            // Управление мышью / тачем (работает всегда для тестов и без камеры)
+            gameCanvas.addEventListener('pointerdown', (e) => {
+                if (!state.isGameRunning) return;
+                const rect = gameCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                handleInteraction(x, y, 24);
+            });
+
+            // Горячие клавиши
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+                if (e.key === 'Escape') {
+                    stopGame();
+                } else if (e.code === 'Space') {
+                    e.preventDefault();
+                    if (state.isGameRunning) stopGame();
+                    else startGame(true);
+                } else if (e.key.toLowerCase() === 'f') {
+                    toggleBrowserFullscreen();
+                } else if (e.key.toLowerCase() === 'd') {
+                    const cb = document.getElementById('showMotionOverlay');
+                    cb.checked = !cb.checked;
+                    syncSettings();
+                }
+            });
+        }
+
+        /* =========================================================================
+           6. РАБОТА С USB-КАМЕРОЙ 720p И ДЕТЕКЦИЯ ДВИЖЕНИЯ (CV)
+           ========================================================================= */
+        async function populateCameraList() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoInputs = devices.filter(d => d.kind === 'videoinput');
+                const select = document.getElementById('cameraSelect');
+                const currentVal = select.value;
+
+                select.innerHTML = '<option value="">Автовыбор (внешняя USB)</option>';
+                videoInputs.forEach((dev, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = dev.deviceId;
+                    opt.textContent = dev.label || `Камера #${idx + 1}`;
+                    select.appendChild(opt);
+                });
+                if (currentVal) select.value = currentVal;
+            } catch (err) {
+                console.warn('Не удалось получить список камер:', err);
+            }
+        }
+
+        async function startCamera() {
+            stopCamera();
+            try {
+                const selectedId = document.getElementById('cameraSelect').value;
+                const videoConstraints = {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                };
+
+                if (selectedId) {
+                    videoConstraints.deviceId = { exact: selectedId };
+                } else {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoInputs = devices.filter(d => d.kind === 'videoinput');
+                    if (videoInputs.length > 1) {
+                        const external = videoInputs.find(d => {
+                            const lbl = d.label.toLowerCase();
+                            return lbl && !lbl.includes('integrated') && !lbl.includes('built-in') && !lbl.includes('facetime');
+                        });
+                        if (external) {
+                            videoConstraints.deviceId = { exact: external.deviceId };
+                        }
+                    }
+                }
+
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
+                cameraVideo.srcObject = cameraStream;
+                await cameraVideo.play();
+
+                // Обновляем список камер (после выдачи прав появятся реальные названия устройств)
+                populateCameraList();
+
+                state.isCameraActive = true;
+                previousGrayFrame = null;
+                document.getElementById('cameraPlaceholder').style.display = 'none';
+                updateStatus('Камера 720p активна', 'active');
+
+                // Анализ движения ~20 FPS (50 мс) — оптимальный баланс скорости и CPU
+                cvInterval = setInterval(processCameraFrame, 50);
+            } catch (err) {
+                console.error('Ошибка запуска камеры:', err);
+                updateStatus('Ошибка доступа к камере', 'error');
+            }
+        }
+
+        function stopCamera() {
+            if (cvInterval) {
+                clearInterval(cvInterval);
+                cvInterval = null;
+            }
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(t => t.stop());
+                cameraStream = null;
+            }
+            cameraVideo.srcObject = null;
+            previousGrayFrame = null;
+            state.isCameraActive = false;
+            state.motionBlobs = [];
+
+            previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+            document.getElementById('cameraPlaceholder').style.display = 'flex';
+            updateStatus(state.isGameRunning ? 'Игра запущена (мышь)' : 'Система готова', state.isGameRunning ? 'active' : '');
+        }
+
+        function getRoiBounds() {
+            const x1 = Math.floor((state.settings.roiLeft / 100) * CV_WIDTH);
+            const x2 = Math.floor(CV_WIDTH - (state.settings.roiRight / 100) * CV_WIDTH);
+            const y1 = Math.floor((state.settings.roiTop / 100) * CV_HEIGHT);
+            const y2 = Math.floor(CV_HEIGHT - (state.settings.roiBottom / 100) * CV_HEIGHT);
+            return {
+                x1,
+                y1,
+                w: Math.max(10, x2 - x1),
+                h: Math.max(10, y2 - y1)
+            };
+        }
+
+        function processCameraFrame() {
+            if (!state.isCameraActive || cameraVideo.readyState < 2) return;
+
+            // 1. Рисуем текущий кадр в cvCanvas (с учётом зеркалирования)
+            cvCtx.save();
+            if (state.settings.mirrorCamera) {
+                cvCtx.translate(CV_WIDTH, 0);
+                cvCtx.scale(-1, 1);
+            }
+            cvCtx.drawImage(cameraVideo, 0, 0, CV_WIDTH, CV_HEIGHT);
+            cvCtx.restore();
+
+            const frameData = cvCtx.getImageData(0, 0, CV_WIDTH, CV_HEIGHT);
+            const data = frameData.data;
+            const totalPixels = CV_WIDTH * CV_HEIGHT;
+            const currentGray = new Uint8Array(totalPixels);
+
+            // Конвертация в оттенки серого (быстрее и стабильнее к цветным засветам)
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                currentGray[p] = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+            }
+
+            const roi = getRoiBounds();
+
+            if (!previousGrayFrame) {
+                previousGrayFrame = currentGray;
+                drawCameraPreview(roi, null);
+                return;
+            }
+
+            // 2. Порог разности (sensitivity 1..10 => порог от 65 до 15)
+            const threshold = Math.max(12, 70 - state.settings.sensitivity * 5.5);
+            const binaryMask = new Uint8Array(totalPixels);
+
+            // Анализируем только внутри откалиброванной области стены (ROI)
+            for (let y = roi.y1; y < roi.y1 + roi.h; y++) {
+                const rowOffset = y * CV_WIDTH;
+                for (let x = roi.x1; x < roi.x1 + roi.w; x++) {
+                    const idx = rowOffset + x;
+                    const diff = Math.abs(currentGray[idx] - previousGrayFrame[idx]);
+                    if (diff > threshold) {
+                        binaryMask[idx] = 1;
+                    }
+                }
+            }
+
+            previousGrayFrame = currentGray;
+
+            // 3. Поиск связных пятен движения (Flood Fill с шагом 2px для скорости)
+            const blobs = findMotionBlobs(binaryMask, roi);
+
+            // 4. Преобразование координат из ROI камеры на всю площадь проекции gameCanvas
+            state.motionBlobs = blobs.map(blob => {
+                const normX = (blob.cx - roi.x1) / roi.w;
+                const normY = (blob.cy - roi.y1) / roi.h;
+                return {
+                    x: normX * gameCanvas.width,
+                    y: normY * gameCanvas.height,
+                    radius: Math.min(90, Math.max(18, Math.sqrt(blob.pixels) * 3.2)),
+                    born: performance.now()
+                };
+            });
+
+            // 5. Проверка столкновений с игровыми объектами
+            if (state.isGameRunning && state.motionBlobs.length > 0) {
+                for (const blob of state.motionBlobs) {
+                    handleInteraction(blob.x, blob.y, blob.radius);
+                }
+            }
+
+            // 6. Отрисовка превью камеры в боковой панели (только если панель видима)
+            if (!document.body.classList.contains('fullscreen-game')) {
+                drawCameraPreview(roi, binaryMask);
+            }
+        }
+
+        function findMotionBlobs(mask, roi) {
+            const visited = new Uint8Array(CV_WIDTH * CV_HEIGHT);
+            const blobs = [];
+            const minPixels = state.settings.minBlobSize;
+            const maxX = roi.x1 + roi.w;
+            const maxY = roi.y1 + roi.h;
+
+            for (let y = roi.y1; y < maxY; y += 2) {
+                for (let x = roi.x1; x < maxX; x += 2) {
+                    const startIdx = y * CV_WIDTH + x;
+                    if (mask[startIdx] === 1 && visited[startIdx] === 0) {
+                        const stack = [x, y];
+                        let pixels = 0;
+                        let sumX = 0;
+                        let sumY = 0;
+
+                        while (stack.length > 0) {
+                            const cy = stack.pop();
+                            const cx = stack.pop();
+                            if (cx < roi.x1 || cx >= maxX || cy < roi.y1 || cy >= maxY) continue;
+                            const idx = cy * CV_WIDTH + cx;
+                            if (visited[idx] === 1 || mask[idx] === 0) continue;
+
+                            visited[idx] = 1;
+                            pixels++;
+                            sumX += cx;
+                            sumY += cy;
+
+                            stack.push(cx + 2, cy, cx - 2, cy, cx, cy + 2, cx, cy - 2);
+                        }
+
+                        if (pixels * 4 >= minPixels) {
+                            blobs.push({
+                                cx: sumX / pixels,
+                                cy: sumY / pixels,
+                                pixels: pixels * 4
+                            });
+                        }
+                    }
+                }
+            }
+            return blobs;
+        }
+
+        function drawCameraPreview(roi, binaryMask) {
+            if (state.settings.showMotionMask && binaryMask) {
+                const img = previewCtx.createImageData(CV_WIDTH, CV_HEIGHT);
+                for (let i = 0; i < binaryMask.length; i++) {
+                    const val = binaryMask[i] ? 255 : 0;
+                    const p = i * 4;
+                    img.data[p] = val;
+                    img.data[p + 1] = val ? 80 : 0;
+                    img.data[p + 2] = val ? 80 : 0;
+                    img.data[p + 3] = 255;
+                }
+                previewCtx.putImageData(img, 0, 0);
+            } else {
+                previewCtx.drawImage(cvCanvas, 0, 0);
+            }
+
+            // Рамка ROI (откалиброванной области стены)
+            previewCtx.strokeStyle = '#4ade80';
+            previewCtx.lineWidth = 2;
+            previewCtx.strokeRect(roi.x1, roi.y1, roi.w, roi.h);
+        }
+
+        /* =========================================================================
+           7. ИГРОВАЯ ЛОГИКА И ОБЪЕКТЫ
+           ========================================================================= */
+        function selectGame(gameType) {
+            if (state.isGameRunning) stopGame();
+            state.currentGame = gameType;
+
+            document.getElementById('btn-game-bubbles').classList.toggle('active', gameType === 'bubbles');
+            document.getElementById('btn-game-ships').classList.toggle('active', gameType === 'ships');
+            document.getElementById('bubblesSettings').style.display = gameType === 'bubbles' ? 'block' : 'none';
+            document.getElementById('shipsSettings').style.display = gameType === 'ships' ? 'block' : 'none';
+            document.getElementById('livesDisplay').style.display = gameType === 'ships' ? 'block' : 'none';
+
+            document.getElementById('gameTitle').textContent =
+                gameType === 'bubbles' ? '🫧 Лопание пузырей' : '🚀 Космические захватчики';
+        }
+
+        function startGame(hideSidebar = true) {
+            if (state.isGameRunning) stopGame();
+
+            document.getElementById('gameOverOverlay').classList.remove('visible');
+            if (hideSidebar) {
+                document.body.classList.add('fullscreen-game');
+            }
+
+            // Ждём завершения CSS-перехода панели и пересчитываем Canvas
+            setTimeout(() => {
+                resizeCanvases();
+                state.isGameRunning = true;
+                state.score = 0;
+                state.lives = state.maxLives;
+                state.bubbles = [];
+                state.ships = [];
+                state.particles = [];
+                updateHUD();
+                updateStatus('Игра активна', 'active');
+
+                if (state.currentGame === 'bubbles') {
+                    spawnBubble();
+                    spawnTimer = setInterval(spawnBubble, state.settings.bubbleSpeed);
+                } else {
+                    spawnShip();
+                    spawnTimer = setInterval(spawnShip, state.settings.shipSpeed);
+                }
+            }, 260);
+        }
+
+        function stopGame() {
+            state.isGameRunning = false;
+            if (spawnTimer) {
+                clearInterval(spawnTimer);
+                spawnTimer = null;
+            }
+            document.body.classList.remove('fullscreen-game');
+            document.getElementById('gameOverOverlay').classList.remove('visible');
+
+            state.bubbles = [];
+            state.ships = [];
+            setTimeout(resizeCanvases, 260);
+
+            updateStatus(state.isCameraActive ? 'Камера 720p активна' : 'Система готова', state.isCameraActive ? 'active' : '');
+        }
+
+        function restartGame() {
+            const wasFullscreen = document.body.classList.contains('fullscreen-game');
+            startGame(wasFullscreen);
+        }
+
+        function triggerGameOver() {
+            state.isGameRunning = false;
+            if (spawnTimer) {
+                clearInterval(spawnTimer);
+                spawnTimer = null;
+            }
+            document.getElementById('finalScoreText').textContent = `Ваш счёт: ${state.score}`;
+            document.getElementById('gameOverOverlay').classList.add('visible');
+            updateStatus('Игра окончена', '');
+        }
+
+        /* --- ПУЗЫРИ --- */
+        function spawnBubble() {
+            if (!state.isGameRunning) return;
+            const baseR = state.settings.bubbleSize * 0.5;
+            const radius = baseR * (0.75 + Math.random() * 0.5);
+            state.bubbles.push({
+                x: radius + Math.random() * (gameCanvas.width - radius * 2),
+                y: gameCanvas.height + radius,
+                baseX: 0,
+                radius,
+                speedY: 1.2 + Math.random() * 1.8,
+                phase: Math.random() * Math.PI * 2,
+                swayAmp: 0.4 + Math.random() * 0.8,
+                hue: Math.floor(Math.random() * 360)
+            });
+        }
+
+        /* --- КОРАБЛИ --- */
+        function spawnShip() {
+            if (!state.isGameRunning) return;
+            const fromLeft = Math.random() > 0.5;
+            const size = 46 + Math.random() * 18;
+            state.ships.push({
+                x: fromLeft ? -size : gameCanvas.width + size,
+                y: 110 + Math.random() * (gameCanvas.height - 200),
+                size,
+                vx: (fromLeft ? 1 : -1) * (state.settings.shipMoveSpeed + Math.random() * 1.2),
+                wobblePhase: Math.random() * Math.PI * 2,
+                colorHue: 350 + Math.random() * 30
+            });
+        }
+
+        /* --- ВЗАИМОДЕЙСТВИЕ (КАМЕРА ИЛИ МЫШЬ) --- */
+        function handleInteraction(x, y, hitRadius = 25) {
+            if (state.currentGame === 'bubbles') {
+                for (let i = state.bubbles.length - 1; i >= 0; i--) {
+                    const b = state.bubbles[i];
+                    const dist = Math.hypot(x - b.x, y - b.y);
+                    if (dist <= b.radius + hitRadius * 0.65) {
+                        spawnBurstParticles(b.x, b.y, b.hue, 18);
+                        state.bubbles.splice(i, 1);
+                        state.score += 10;
+                        SoundFX.playPop();
+                        updateHUD();
+                    }
+                }
+            } else if (state.currentGame === 'ships') {
+                for (let i = state.ships.length - 1; i >= 0; i--) {
+                    const s = state.ships[i];
+                    const dist = Math.hypot(x - s.x, y - s.y);
+                    if (dist <= s.size * 0.75 + hitRadius * 0.65) {
+                        spawnBurstParticles(s.x, s.y, 28, 26);
+                        state.ships.splice(i, 1);
+                        state.score += 25;
+                        SoundFX.playExplosion();
+                        updateHUD();
+                    }
+                }
+            }
+        }
+
+        function spawnBurstParticles(x, y, hue, count) {
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+                const speed = 2 + Math.random() * 6;
+                state.particles.push({
+                    x,
+                    y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    r: 2.5 + Math.random() * 4.5,
+                    life: 1,
+                    decay: 0.025 + Math.random() * 0.025,
+                    hue: hue + (Math.random() * 40 - 20)
+                });
+            }
+        }
+
+        /* =========================================================================
+           8. ГЛАВНЫЙ ЦИКЛ ОТРИСОВКИ (60 FPS)
+           ========================================================================= */
+        function renderLoop(timestamp) {
+            const dt = Math.min(2, (timestamp - (lastFrameTime || timestamp)) / 16.67);
+            lastFrameTime = timestamp;
+
+            // Очистка
+            ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // 1. Фоновый космос / звёзды (или кастомный фон из AssetManager)
+            const bgImg = AssetManager.get('background');
+            if (bgImg) {
+                ctx.drawImage(bgImg, 0, 0, gameCanvas.width, gameCanvas.height);
+            } else {
+                drawStars(dt);
+            }
+
+            // 2. Обновление и отрисовка игровых объектов
+            if (state.isGameRunning) {
+                if (state.currentGame === 'bubbles') {
+                    updateAndDrawBubbles(dt, timestamp);
+                } else {
+                    updateAndDrawShips(dt, timestamp);
+                }
+            }
+
+            // 3. Частицы взрывов / лопания
+            updateAndDrawParticles(dt);
+
+            // 4. Отладочный слой (точки движения от камеры)
+            drawDebugOverlay(timestamp);
+
+            animFrameId = requestAnimationFrame(renderLoop);
+        }
+
+        function drawStars(dt) {
+            ctx.save();
+            for (const st of state.stars) {
+                st.y += st.speed * dt;
+                if (st.y > gameCanvas.height) {
+                    st.y = 0;
+                    st.x = Math.random() * gameCanvas.width;
+                }
+                ctx.fillStyle = `rgba(255, 255, 255, ${st.alpha})`;
+                ctx.beginPath();
+                ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function updateAndDrawBubbles(dt, time) {
+            const bubbleSprite = AssetManager.get('bubble');
+
+            for (let i = state.bubbles.length - 1; i >= 0; i--) {
+                const b = state.bubbles[i];
+                b.y -= b.speedY * dt;
+                b.x += Math.sin(time * 0.0025 + b.phase) * b.swayAmp * dt;
+
+                if (b.y + b.radius < -10) {
+                    state.bubbles.splice(i, 1);
+                    continue;
+                }
+
+                if (bubbleSprite) {
+                    ctx.drawImage(bubbleSprite, b.x - b.radius, b.y - b.radius, b.radius * 2, b.radius * 2);
+                } else {
+                    // Красивый глянцевый пузырь с градиентом и бликом
+                    const grad = ctx.createRadialGradient(
+                        b.x - b.radius * 0.3, b.y - b.radius * 0.3, b.radius * 0.1,
+                        b.x, b.y, b.radius
+                    );
+                    grad.addColorStop(0, `hsla(${b.hue}, 100%, 88%, 0.85)`);
+                    grad.addColorStop(0.55, `hsla(${b.hue}, 95%, 60%, 0.45)`);
+                    grad.addColorStop(1, `hsla(${b.hue}, 90%, 45%, 0.78)`);
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = `hsla(${b.hue}, 100%, 85%, 0.75)`;
+                    ctx.stroke();
+
+                    // Блик сверху слева
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        b.x - b.radius * 0.32, b.y - b.radius * 0.34,
+                        b.radius * 0.24, b.radius * 0.13,
+                        -Math.PI / 4, 0, Math.PI * 2
+                    );
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        }
+
+        function updateAndDrawShips(dt, time) {
+            const shipSprite = AssetManager.get('ship');
+
+            for (let i = state.ships.length - 1; i >= 0; i--) {
+                const s = state.ships[i];
+                s.x += s.vx * dt;
+                s.y += Math.sin(time * 0.004 + s.wobblePhase) * 0.8 * dt;
+
+                // Вылетел за противоположную границу — потеря жизни
+                if ((s.vx > 0 && s.x > gameCanvas.width + s.size) || (s.vx < 0 && s.x < -s.size)) {
+                    state.ships.splice(i, 1);
+                    state.lives--;
+                    updateHUD();
+                    if (state.lives <= 0) {
+                        triggerGameOver();
+                        return;
+                    }
+                    continue;
+                }
+
+                ctx.save();
+                ctx.translate(s.x, s.y);
+                if (s.vx < 0) ctx.scale(-1, 1);
+
+                if (shipSprite) {
+                    ctx.drawImage(shipSprite, -s.size * 0.6, -s.size * 0.6, s.size * 1.2, s.size * 1.2);
+                } else {
+                    const r = s.size * 0.55;
+                    // Пламя двигателя
+                    const flameLen = r * (0.7 + Math.random() * 0.5);
+                    ctx.fillStyle = '#fb923c';
+                    ctx.beginPath();
+                    ctx.moveTo(-r * 0.85, -r * 0.25);
+                    ctx.lineTo(-r * 0.85 - flameLen, 0);
+                    ctx.lineTo(-r * 0.85, r * 0.25);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Корпус корабля
+                    const bodyGrad = ctx.createLinearGradient(-r, -r, r, r);
+                    bodyGrad.addColorStop(0, '#f43f5e');
+                    bodyGrad.addColorStop(1, '#9f1239');
+                    ctx.fillStyle = bodyGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(r * 1.15, 0);
+                    ctx.lineTo(-r * 0.85, -r * 0.72);
+                    ctx.lineTo(-r * 0.45, 0);
+                    ctx.lineTo(-r * 0.85, r * 0.72);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Кабина
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.beginPath();
+                    ctx.ellipse(r * 0.15, 0, r * 0.32, r * 0.18, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        function updateAndDrawParticles(dt) {
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                const p = state.particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.vx *= 0.96;
+                p.vy *= 0.96;
+                p.life -= p.decay * dt;
+
+                if (p.life <= 0) {
+                    state.particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.fillStyle = `hsla(${p.hue}, 100%, 65%, ${p.life})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawDebugOverlay(now) {
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            if (!state.settings.showMotionOverlay) return;
+
+            for (const blob of state.motionBlobs) {
+                if (now - blob.born > 250) continue;
+                overlayCtx.save();
+                overlayCtx.beginPath();
+                overlayCtx.arc(blob.x, blob.y, blob.radius, 0, Math.PI * 2);
+                overlayCtx.strokeStyle = 'rgba(74, 222, 128, 0.85)';
+                overlayCtx.lineWidth = 3;
+                overlayCtx.stroke();
+                overlayCtx.fillStyle = 'rgba(74, 222, 128, 0.18)';
+                overlayCtx.fill();
+                overlayCtx.restore();
+            }
+        }
+
+        /* =========================================================================
+           9. ИНТЕРФЕЙС И НАСТРОЙКИ
+           ========================================================================= */
+        function syncSettings() {
+            const s = state.settings;
+            s.mirrorCamera = document.getElementById('mirrorCamera').checked;
+            s.roiLeft = parseInt(document.getElementById('roiLeft').value, 10);
+            s.roiRight = parseInt(document.getElementById('roiRight').value, 10);
+            s.roiTop = parseInt(document.getElementById('roiTop').value, 10);
+            s.roiBottom = parseInt(document.getElementById('roiBottom').value, 10);
+            s.sensitivity = parseInt(document.getElementById('sensitivity').value, 10);
+            s.minBlobSize = parseInt(document.getElementById('minBlobSize').value, 10);
+
+            s.bubbleSpeed = parseInt(document.getElementById('bubbleSpeed').value, 10);
+            s.bubbleSize = parseInt(document.getElementById('bubbleSize').value, 10);
+            s.shipSpeed = parseInt(document.getElementById('shipSpeed').value, 10);
+            s.shipMoveSpeed = parseFloat(document.getElementById('shipMoveSpeed').value);
+            state.maxLives = parseInt(document.getElementById('maxLives').value, 10) || 5;
+
+            s.soundEnabled = document.getElementById('soundEnabled').checked;
+            s.showMotionOverlay = document.getElementById('showMotionOverlay').checked;
+            s.showMotionMask = document.getElementById('showMotionMask').checked;
+
+            // Обновляем подписи значений
+            document.getElementById('roiLeftVal').textContent = s.roiLeft + '%';
+            document.getElementById('roiRightVal').textContent = s.roiRight + '%';
+            document.getElementById('roiTopVal').textContent = s.roiTop + '%';
+            document.getElementById('roiBottomVal').textContent = s.roiBottom + '%';
+            document.getElementById('sensitivityVal').textContent = s.sensitivity;
+            document.getElementById('minBlobVal').textContent = s.minBlobSize;
+            document.getElementById('bubbleSpeedVal').textContent = (s.bubbleSpeed / 1000).toFixed(1) + 'с';
+            document.getElementById('bubbleSizeVal').textContent = s.bubbleSize + 'px';
+            document.getElementById('shipSpeedVal').textContent = (s.shipSpeed / 1000).toFixed(1) + 'с';
+            document.getElementById('shipMoveSpeedVal').textContent = s.shipMoveSpeed;
+        }
+
+        function resetROI() {
+            ['roiLeft', 'roiRight', 'roiTop', 'roiBottom'].forEach(id => {
+                document.getElementById(id).value = 0;
+            });
+            syncSettings();
+        }
+
+        function updateHUD() {
+            document.getElementById('scoreDisplay').textContent = `Счёт: ${state.score}`;
+            document.getElementById('livesDisplay').textContent = `❤️ ${state.lives}`;
+        }
+
+        function updateStatus(text, cssClass = '') {
+            const el = document.getElementById('systemStatus');
+            el.textContent = text;
+            el.className = 'status' + (cssClass ? ' ' + cssClass : '');
+        }
+
+        function toggleBrowserFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.warn('Не удалось открыть полноэкранный режим:', err);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Старт
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
