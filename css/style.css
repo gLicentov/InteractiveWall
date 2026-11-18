@@ -1,0 +1,349 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #000;
+    color: #fff;
+    user-select: none;
+}
+
+.container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* === БОКОВАЯ ПАНЕЛЬ УПРАВЛЕНИЯ === */
+.sidebar {
+    width: 320px;
+    background: #14161c;
+    border-right: 1px solid #2b2f3a;
+    padding: 16px;
+    overflow-y: auto;
+    flex-shrink: 0;
+    transition: margin-left 0.25s ease;
+    z-index: 20;
+}
+
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: #333947;
+    border-radius: 3px;
+}
+
+body.fullscreen-game .sidebar {
+    margin-left: -320px;
+}
+
+.section {
+    margin-bottom: 14px;
+    padding: 12px;
+    background: #1e212b;
+    border: 1px solid #2c3140;
+    border-radius: 8px;
+}
+
+.section h3 {
+    color: #4ade80;
+    margin-bottom: 10px;
+    font-size: 12px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+
+.status {
+    padding: 8px 10px;
+    background: #2b303d;
+    border-radius: 6px;
+    font-size: 12px;
+    text-align: center;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.status.active {
+    background: #15803d;
+    color: #fff;
+}
+
+.status.error {
+    background: #b91c1c;
+    color: #fff;
+}
+
+.control-group {
+    margin-bottom: 8px;
+}
+
+label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    margin-bottom: 4px;
+    color: #cbd5e1;
+}
+
+label span.val {
+    color: #4ade80;
+    font-weight: 600;
+}
+
+input[type="range"] {
+    width: 100%;
+    accent-color: #4ade80;
+    cursor: pointer;
+}
+
+input[type="number"],
+select {
+    width: 100%;
+    padding: 6px 8px;
+    background: #111318;
+    color: #fff;
+    border: 1px solid #374151;
+    border-radius: 5px;
+    font-size: 12px;
+}
+
+.row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+button {
+    width: 100%;
+    padding: 8px 10px;
+    margin-top: 4px;
+    background: #22c55e;
+    color: #052e16;
+    font-weight: 700;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+button.secondary {
+    background: #334155;
+    color: #f8fafc;
+}
+
+button.danger {
+    background: #ef4444;
+    color: #fff;
+}
+
+button.game-btn {
+    background: #272d3d;
+    color: #e2e8f0;
+    text-align: left;
+    padding: 9px 12px;
+    border: 1px solid transparent;
+}
+
+button.game-btn.active {
+    background: #1d4ed8;
+    color: #fff;
+    border-color: #60a5fa;
+}
+
+.checkbox-label {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    margin: 6px 0;
+}
+
+.checkbox-label input {
+    width: 15px;
+    height: 15px;
+    accent-color: #4ade80;
+}
+
+.video-preview-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #0b0d12;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+    border: 1px solid #334155;
+}
+
+#cameraVideo {
+    display: none;
+}
+
+#cameraPreviewCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+}
+
+#cameraPlaceholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 12px;
+    text-align: center;
+    padding: 10px;
+}
+
+.hotkeys-hint {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.5;
+}
+
+.hotkeys-hint kbd {
+    background: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: #e2e8f0;
+    font-family: monospace;
+}
+
+/* === ИГРОВАЯ ОБЛАСТЬ === */
+.game-area {
+    position: relative;
+    flex: 1;
+    background: radial-gradient(circle at 30% 20%, #162238 0%, #070b14 100%);
+    overflow: hidden;
+}
+
+#gameCanvas,
+#overlayCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#overlayCanvas {
+    pointer-events: none;
+    z-index: 5;
+}
+
+.hud-top {
+    position: absolute;
+    top: 20px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.game-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #f8fafc;
+    text-shadow: 0 3px 12px rgba(0, 0, 0, 0.7);
+}
+
+.hud-stats {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.score-badge,
+.lives-badge {
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.score-badge {
+    color: #4ade80;
+}
+
+.lives-badge {
+    color: #f87171;
+}
+
+.exit-hint {
+    position: absolute;
+    bottom: 14px;
+    left: 16px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.35);
+    pointer-events: none;
+    z-index: 10;
+    display: none;
+}
+
+body.fullscreen-game .exit-hint {
+    display: block;
+}
+
+.game-over-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 8, 18, 0.8);
+    backdrop-filter: blur(6px);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    gap: 16px;
+}
+
+.game-over-overlay.visible {
+    display: flex;
+}
+
+.game-over-overlay h1 {
+    font-size: 52px;
+    color: #f87171;
+}
+
+.game-over-overlay p {
+    font-size: 28px;
+    color: #4ade80;
+    font-weight: 700;
+}
+
+.game-over-actions {
+    display: flex;
+    gap: 12px;
+    width: 320px;
+}
